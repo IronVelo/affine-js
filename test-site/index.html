@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Affine Tests</title>
+    <script src="bundle.js"></script>
+</head>
+<body>
+    <h1>Affine Test</h1>
+    <input type="text" id="valueInput" placeholder="Enter a value">
+    <button id="giveButton">Give Value</button>
+    <button id="takeButton">Take Value</button>
+    <p id="give-output"></p>
+    <p id="recv-output"></p>
+
+    <script>
+        let affineInstance;
+
+        // Initialize Affine
+        Affine.browser.Affine.init('myKey')
+            .then(instance => {
+                affineInstance = instance;
+                console.log('Affine initialized');
+            })
+            .catch(error => {
+                console.error('Error initializing Affine:', error);
+            });
+
+        // Give button functionality
+        document.getElementById('giveButton').addEventListener('click', () => {
+            const value = document.getElementById('valueInput').value;
+            if (affineInstance && value) {
+                affineInstance.give(value)
+                    .then(() => {
+                        console.log("Gave value to myKey");
+                        document.getElementById('give-output').textContent = `Value "${value}" stored in Affine`;
+                    })
+                    .catch(error => {
+                        document.getElementById('give-output').textContent = `Error storing value: ${error.message}`;
+                    });
+            } else {
+                document.getElementById('give-output').textContent = 'Please enter a value and ensure Affine is initialized';
+            }
+        });
+
+        // Take button functionality
+        document.getElementById('takeButton').addEventListener('click', () => {
+            if (affineInstance) {
+                document.getElementById('recv-output').textContent = "Waiting...";
+
+                affineInstance.take()
+                    .then(value => {
+                        console.log("Got value from my key: ".concat(value));
+                        document.getElementById('recv-output').textContent = `Retrieved value: ${value}`;
+                    })
+                    .catch(error => {
+                        document.getElementById('recv-output').textContent = `Error retrieving value: ${error.message}`;
+                    });
+            } else {
+                document.getElementById('output').textContent = 'Affine is not initialized';
+            }
+        });
+    </script>    
+</body>
+</html>

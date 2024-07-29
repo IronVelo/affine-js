@@ -1,0 +1,32 @@
+[package]
+name = "test-site"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+bad-cache = ["lru"]
+reload = []
+no-logs = ["tracing/max_level_off"]
+no-debug-logs = ["tracing/max_level_info"]
+no-debug-release-logs = ["tracing/release_max_level_info"]
+
+default = ["no-debug-release-logs", "bad-cache"]
+
+[dependencies]
+tracing = { version = "0.1.40"}
+tracing-subscriber = "0.3.18"
+swift-check = "0.2.1"
+bumpalo = { version = "3.9", features = ["collections", "boxed"] }
+tokio = { version = "1.39.2", features = ["fs", "net", "rt-multi-thread", "io-util"] }
+num_cpus = "1.0"
+lru = { version = "0.12.3", optional = true }
+
+[profile.release]
+debug = false
+overflow-checks = false
+debug-assertions = false
+lto = "fat"
+panic = "abort"
+codegen-units = 1
+incremental = false
+opt-level = 3

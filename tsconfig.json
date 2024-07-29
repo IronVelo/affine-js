@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "declaration": true,
+    "declarationDir": "./js",
+    "noImplicitAny": false,
+    "noEmitOnError": true,
+    "removeComments": true,
+    "sourceMap": true,
+    "lib": ["es2015", "webworker"],
+    "rootDir": "./src",
+    "outDir": "js"
+  },
+  "include": [
+    "src/**/*"
+  ]
+}

@@ -1,0 +1,46 @@
+{
+    "name": "affine-ty",
+    "version": "0.1.0",
+    "description": "A simple, asynchronous affine type implementation for browsers and local contexts.",
+    "main": "js/index.js",
+    "types": "js/index.d.ts",
+    "files": [
+        "js",
+        "dist/bundle.js",
+        "dist/bundle.js.map",
+        "dist/affine-service-worker.js",
+        "dist/affine-service-worker.js.map",
+        "js/**/*.d.ts"
+    ],
+    "type": "module",
+    "scripts": {
+        "version-check": "./util/check-version",
+        "build:ts": "tsc",
+        "build:rollup": "rollup -c",
+        "build": "npm run build:ts && npm run build:rollup",
+        "prepublishOnly": "npm run version-check && npm run build"
+    },
+    "keywords": [
+        "affine",
+        "browser",
+        "asynchronous",
+        "cross-tab",
+        "synchronization"
+    ],
+    "author": "IronVelo",
+    "license": "(MIT OR Apache-2.0)",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/IronVelo/affine-js"
+    },
+    "homepage": "https://github.com/IronVelo/affine-js",
+    "devDependencies": {
+        "@rollup/plugin-typescript": "^11.1.6",
+        "rollup": "^4.19.0",
+        "tslib": "^2.6.3",
+        "typescript": "^5.5.4"
+    },
+    "unpkg": "dist/bundle.js",
+    "jsdelivr": "dist/bundle.js",
+    "typings": "js/index.d.ts"
+}
