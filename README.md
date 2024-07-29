@@ -82,6 +82,36 @@ await affine.give(res.headers.get('my-affine-value'));
 It is very easy to reason about the correctness of our usage here, we can very clearly see that we have no potential
 for a deadlock.
 
+## Browser Setup
+
+The `browser` Affine type requires the `affine-service-worker.js` file to be distributed by your backend. We are 
+unable to distribute this via any CDN for security purposes. The service worker `src/affine-service-worker.ts` is 75 
+LOC (lines of code) in total, so it is very easy to review and ensure we are not running anything malicious on your 
+behalf.
+
+The default path that the library expects the service worker to exist at is `/affine-service-worker.js`. This can be 
+modified via the `swPath` parameter in the `Affine.init` constructor.
+
+You can find the JavaScript for the service worker in the `service-worker` directory. Simply copy this to the directory 
+which your server is distributing (for example, on `Next.js` this is your `public` directory).
+
+### Service Worker Install
+
+1. **Move to the directory your server is distributing:**
+
+    ```sh
+    cd distributed-directory
+    ```
+
+2. **Download the service worker and the corresponding js.map file:**
+
+    ```sh
+    wget https://raw.githubusercontent.com/IronVelo/affine-js/main/service-worker/affine-service-worker.js \
+        && wget https://raw.githubusercontent.com/IronVelo/affine-js/main/service-worker/affine-service-worker.js.map
+    ```
+
+And you're all set up! You now can use the `browser` Affine type.
+
 ## API
 
 ### Browser Context

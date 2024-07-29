@@ -1,6 +1,6 @@
 {
     "name": "affine-ty",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "A simple, asynchronous affine type implementation for browsers and local contexts.",
     "main": "js/index.js",
     "types": "js/index.d.ts",
@@ -17,7 +17,7 @@
         "version-check": "./util/check-version",
         "build:ts": "tsc",
         "build:rollup": "rollup -c",
-        "cp-sw": "cp js/affine-service-worker.* service-worker",
+        "cp-sw": "cp dist/affine-service-worker.* service-worker",
         "build": "npm run build:ts && npm run cp-sw && npm run build:rollup",
         "prepublishOnly": "npm run version-check && npm run build"
     },
