@@ -12,12 +12,9 @@ import {
     UnexpectedError
 } from './error';
 
-import { VERSION } from './version';
-
 export default class Affine<T> {
     private key: string;
-    private static readonly DEFAULT_SW_PATH = 
-        `https://cdn.jsdelivr.net/npm/affine-ty@${VERSION}/dist/affine-service-worker.js`; 
+    private static readonly DEFAULT_SW_PATH = "affine-service-worker.js";
     private serviceWorker: ServiceWorkerRegistration;
 
     private constructor(key: string, service_worker: ServiceWorkerRegistration) {
@@ -46,7 +43,7 @@ export default class Affine<T> {
 
         try {
             const registration = await worker.register(
-                swPath || this.DEFAULT_SW_PATH
+                swPath || this.DEFAULT_SW_PATH 
             );
             await worker.ready;
             return registration;

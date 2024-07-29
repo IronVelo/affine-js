@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 /**
- * @file Affine type browser management's service worker.
+ * @file Affine type browser management\'s service worker.
  * @author IronVelo
  * @version 0.1.0
  */
@@ -59,10 +59,10 @@ function eventHandler(store: AffineStore): (event: ExtendableMessageEvent) => vo
         }
 
         switch (action) {
-            case 'take':
+            case "take":
                 takeHandler(store, key, port);
                 break;
-            case 'give':
+            case "give":
                 giveHandler(store, key, value, port);
                 break;
             default:
