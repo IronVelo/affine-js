@@ -17,7 +17,8 @@
         "version-check": "./util/check-version",
         "build:ts": "tsc",
         "build:rollup": "rollup -c",
-        "build": "npm run build:ts && npm run build:rollup",
+        "cp-sw": "cp js/affine-service-worker.* service-worker",
+        "build": "npm run build:ts && npm run cp-sw && npm run build:rollup",
         "prepublishOnly": "npm run version-check && npm run build"
     },
     "keywords": [
