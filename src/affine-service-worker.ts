@@ -5,9 +5,11 @@
  * @version 0.1.0
  */
 
+import { Queue } from './queue';
+
 interface AffineData<T> {
     value: T | null,
-    waitQueue: MessagePort[];
+    waitQueue: Queue<MessagePort>;
 }
 
 type AffineStore = { [key: string]: AffineData<unknown> };
@@ -20,7 +22,7 @@ interface AffineMsg {
 
 function takeHandler(store: AffineStore, key: string, port: MessagePort) {
     if (store[key] === undefined) {
-        store[key] = { value: null, waitQueue: [] };
+	store[key] = { value: null, waitQueue: new Queue() };
     }
 
     if (store[key].value !== null) {
@@ -28,16 +30,16 @@ function takeHandler(store: AffineStore, key: string, port: MessagePort) {
         store[key].value = null;
         port.postMessage(takenValue);
     } else {
-        store[key].waitQueue.push(port);
+        store[key].waitQueue.enqueue(port);
     } 
 }
 
 function giveHandler(store: AffineStore, key: string, value: any, port: MessagePort) {
     if (!store[key]) {
-        store[key] = { value: null, waitQueue: [] };
+        store[key] = { value: null, waitQueue: new Queue() };
     }
 
-    const waiter = store[key].waitQueue.shift();
+    const waiter = store[key].waitQueue.dequeue();
 
     if (waiter) {
         waiter.postMessage(value);

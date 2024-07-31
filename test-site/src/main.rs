@@ -318,7 +318,7 @@ impl DistReload {
     ) -> io::Result<()> {
         trace!("Checking cache for the path (unix)");
         let now = std::time::Instant::now();
-
+	
         // ensure iterator is exhausted
         while parsed.next().is_some() {}
 
@@ -379,7 +379,7 @@ impl DistReload {
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "Path does not exist"));
             }
             drop(guard);
-        }
+	}
 
         match LazyFile::new(p_buf.as_path()) {
             Ok(file) => {

@@ -6,10 +6,11 @@
  */
 
 import { PreconditionViolated } from './error';
+import { Queue } from './queue';
 
 export default class Affine<T> {
     private readyValue: T | null = null;
-    private waitQueue: ((value: T) => void)[] = [];
+    private waitQueue: Queue<(value: T) => void> = new Queue();
 
     constructor() {
         this.take.bind(this);
@@ -35,7 +36,7 @@ export default class Affine<T> {
             );
         }
 
-        return new Promise((resolve) => this.waitQueue.push(resolve));
+        return new Promise((resolve) => this.waitQueue.enqueue(resolve));
     }
 
     /**
@@ -76,7 +77,7 @@ export default class Affine<T> {
      * @throws {PreconditionViolated} - Precondition was violated.
      */
     private give_ready(value: T) {
-        if (this.waitQueue.length === 0 && this.readyValue === null) {
+        if (this.waitQueue.isEmpty() && this.readyValue === null) {
             this.readyValue = value;
         } else {
             throw new PreconditionViolated(
@@ -93,7 +94,7 @@ export default class Affine<T> {
      * for the value.
      */
     give(value: T) {
-        let waiter = this.waitQueue.shift();
+        let waiter = this.waitQueue.dequeue();
 
         if (waiter === undefined) {
             // Nothing is waiting on our data, so we store in our readyValue
