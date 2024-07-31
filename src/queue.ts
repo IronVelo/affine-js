@@ -12,17 +12,13 @@ export class Queue<T> {
   
     dequeue(): T | undefined {
         if (this.isEmpty()) {
-	    this.clear();
             return undefined;
         }
         const item = this.items[this.head];
         this.head++;
       
-        // Reset the queue when it's empty
         if (this.head === this.tail) {
-            this.head = 0;
-            this.tail = 0;
-            this.items = [];
+            this.clear();
         }
       
         return item;

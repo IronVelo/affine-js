@@ -13,7 +13,6 @@
         };
         Queue.prototype.dequeue = function () {
             if (this.isEmpty()) {
-                this.clear();
                 return undefined;
             }
             var item = this.items[this.head];
