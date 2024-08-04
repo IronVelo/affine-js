@@ -1,6 +1,6 @@
 {
     "name": "affine-ty",
-    "version": "0.2.1",
+    "version": "0.3.0",
     "description": "A simple, asynchronous affine type implementation for browsers and local contexts.",
     "main": "js/index.js",
     "types": "js/index.d.ts",
@@ -10,7 +10,9 @@
         "dist/bundle.js.map",
         "dist/affine-service-worker.js",
         "dist/affine-service-worker.js.map",
-        "js/**/*.d.ts"
+        "js/**/*.d.ts",
+        "LICENSE-MIT",
+        "LICENSE-APACHE"
     ],
     "type": "module",
     "scripts": {

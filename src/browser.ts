@@ -2,7 +2,7 @@
 /**
  * @file Asynchronous affine type management for browsers, enforcing the types invariants across tabs.
  * @author IronVelo
- * @version 0.2.0
+ * @version 0.3.0
  */
 
 import {

@@ -2,7 +2,7 @@
 /**
  * @file Asynchronous affine type management for local/simple environments.
  * @author IronVelo
- * @version 0.2.0
+ * @version 0.3.0
  */
 
 import { PreconditionViolated } from './error';
@@ -15,6 +15,8 @@ export default class Affine<T> {
     constructor() {
         this.take.bind(this);
         this.give.bind(this);
+        this.isReady.bind(this);
+        this.waitCount.bind(this);
         this.create_waiter.bind(this);
         this.ready_value.bind(this);
         this.give_ready.bind(this);
@@ -103,5 +105,19 @@ export default class Affine<T> {
             // Resolve the waiter providing it the value, ensuring fairness/preventing starvation.
             waiter(value);
         }
+    }
+
+    /**
+     * Check how many tasks / promises are currently waiting on the value.
+     */
+    waitCount(): number {
+        return this.waitQueue.size();
+    }
+
+    /**
+     * Check if the next `take` will immediately succeed.
+     */
+    isReady(): boolean {
+        return this.readyValue !== null && this.waitQueue.isEmpty();
     }
 }

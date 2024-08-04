@@ -2,14 +2,19 @@
 /**
  * @file Affine type browser management\'s service worker.
  * @author IronVelo
- * @version 0.2.0
+ * @version 0.3.0
  */
 
 import { Queue } from './queue';
 
+interface Waiter {
+    id: string,
+    port: MessagePort
+}
+
 interface AffineData<T> {
     value: T | null,
-    waitQueue: Queue<MessagePort>;
+    waitQueue: Queue<Waiter>;
 }
 
 type AffineStore = { [key: string]: AffineData<unknown> };
@@ -20,62 +25,114 @@ interface AffineMsg {
     value?: any
 }
 
-function takeHandler(store: AffineStore, key: string, port: MessagePort) {
-    if (store[key] === undefined) {
-	    store[key] = { value: null, waitQueue: new Queue() };
+interface UbiCtx {
+    store: AffineStore,
+    key: string,
+    port: MessagePort,
+}
+
+function takeHandler(ctx: UbiCtx, client: Client) {
+    let node = ctx.store[ctx.key];
+    if (node === undefined) {
+	    ctx.store[ctx.key] = { value: null, waitQueue: new Queue() };
     }
 
-    if (store[key].value !== null) {
-        const takenValue = store[key].value;
-        store[key].value = null;
-        port.postMessage(takenValue);
+    if (node.value !== null) {
+        const takenValue = node.value;
+        node.value = null;
+        ctx.port.postMessage(takenValue);
     } else {
-        store[key].waitQueue.enqueue(port);
-    } 
+        node.waitQueue.enqueue({ id: client.id, port: ctx.port });
+    }
 }
 
-function giveHandler(store: AffineStore, key: string, value: any, port: MessagePort) {
-    if (!store[key]) {
-        store[key] = { value: null, waitQueue: new Queue() };
+async function getValidWaiter(queue: Queue<Waiter>): Promise<MessagePort | undefined> {
+    // rather than pulling all clients, we use the get api. This is to prioritize hot path where generally
+    // we will succeed on first iter.
+    let swScope = self as any; // ts skill issue
+    while (true) {
+        let maybe = queue.dequeue();
+
+        if (maybe === undefined) {
+            // we have exhausted the queue.
+            return undefined;
+        }
+
+        let client = await swScope.clients.get(maybe.id);
+
+        // needs review as we are yielding. But, we have ownership of our value. 
+        if (client !== undefined) {
+            return maybe.port;
+        }
+
+        // if we couldn't get it, we continue draining the queue.
     }
-
-    const waiter = store[key].waitQueue.dequeue();
-
-    if (waiter) {
-        waiter.postMessage(value);
-    } else {
-        store[key].value = value;
-    }
-
-    port.postMessage(undefined);
 }
 
-function isReadyHandler(store: AffineStore, key: string, port: MessagePort) {
-    if (!store[key]) {
-        port.postMessage(false);
+function giveHandler(ctx: UbiCtx, value: any) {
+    let node = ctx.store[ctx.key];
+    if (!node) {
+        // we must not have any waiters as the store was never initialized for this key.
+        ctx.store[ctx.key] = { value, waitQueue: new Queue() };
+
+        // exit early
+        ctx.port.postMessage(undefined);
         return;
     }
 
-    if (!store[key].waitQueue.isEmpty()) {
-        port.postMessage(false);
+    // prior to getting a valid waiter, we check if the queue is empty
+    if (node.waitQueue.isEmpty()) {
+        // fast path, give val immediately.
+        node.value = value;
+
+        // exit early
+        ctx.port.postMessage(undefined);
         return;
     }
 
-    if (store[key].value === null) {
-        port.postMessage(false);
-        return;
-    }
+    getValidWaiter(node.waitQueue).then(member => {
+        if (member) {
+            // we found a valid waiter, immediately provide the value to ensure fairness.
+            member.postMessage(value);
+        } else {
+            // there was no valid waiter, provide ready value.
+            node.value = value;
+        }
+    });
 
-    port.postMessage(true);
+    // we can let the task waiting on us go early, we'll handle the rest.
+    ctx.port.postMessage(undefined);
 }
 
-function numWaitersHandler(store: AffineStore, key: string, port: MessagePort) {
-    if (!store[key]) {
-        port.postMessage(0);
+function isReadyHandler(ctx: UbiCtx) {
+    let node = ctx.store[ctx.key];
+    if (!node) {
+        ctx.port.postMessage(false);
         return;
     }
 
-    port.postMessage(store[key].waitQueue.size());
+    if (!node.waitQueue.isEmpty()) {
+        ctx.port.postMessage(false);
+        return;
+    }
+
+    if (node.value === null) {
+        ctx.port.postMessage(false);
+        return;
+    }
+
+    ctx.port.postMessage(true);
+}
+
+function numWaitersHandler(ctx: UbiCtx) {
+    let node = ctx.store[ctx.key];
+
+    if (!node) {
+        ctx.port.postMessage(0);
+        return;
+    }
+
+    ctx.port.postMessage(node.waitQueue.size());
 }
 
 function eventHandler(store: AffineStore): (event: ExtendableMessageEvent) => void {
@@ -88,19 +145,21 @@ function eventHandler(store: AffineStore): (event: ExtendableMessageEvent) => vo
             return;
         }
 
+        let ctx: UbiCtx = { port: port, key: key, store: store };
+
         try {
             switch (action) {
                 case "take":
-                    takeHandler(store, key, port);
+                    takeHandler(ctx, event.source as Client);
                     break;
                 case "give":
-                    giveHandler(store, key, value, port);
+                    giveHandler(ctx, value);
                     break;
                 case "waitCount":
-                    numWaitersHandler(store, key, port);
+                    numWaitersHandler(ctx);
                     break;
                 case "isReady":
-                    isReadyHandler(store, key, port);
+                    isReadyHandler(ctx);
                     break;
                 default:
                     console.error(`Illegal action \`${action}\` provided to affine event handler`);

@@ -2,7 +2,7 @@
 /**
  * @file Index for asynchronous affine type management
  * @author IronVelo
- * @version 0.2.0
+ * @version 0.3.0
  */
 
 export class Queue<T> {
