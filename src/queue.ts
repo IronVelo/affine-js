@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
+/**
+ * @file Index for asynchronous affine type management
+ * @author IronVelo
+ * @version 0.2.0
+ */
 
 export class Queue<T> {
     private items: T[] = [];

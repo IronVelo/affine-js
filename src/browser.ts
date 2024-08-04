@@ -2,7 +2,7 @@
 /**
  * @file Asynchronous affine type management for browsers, enforcing the types invariants across tabs.
  * @author IronVelo
- * @version 0.1.0
+ * @version 0.2.0
  */
 
 import {
@@ -24,6 +24,8 @@ export default class Affine<T> {
         this.sendMsg.bind(this);
         this.take.bind(this);
         this.give.bind(this);
+        this.waitCount.bind(this);
+        this.isReady.bind(this);
     }
 
     /**
@@ -76,7 +78,7 @@ export default class Affine<T> {
      *
      * @throws {InactiveServiceWorker} - The service worker could not accept a message
      */
-    private sendMsg(action: "take" | "give", value?: T): Promise<T | undefined> {
+    private sendMsg<R>(action: "take" | "give" | "isReady" | "waitCount", value?: T): Promise<R | undefined> {
         if (!this.serviceWorker.active) {
             throw new InactiveServiceWorker();
         }
@@ -99,11 +101,39 @@ export default class Affine<T> {
         return response;
     }
 
+    /**
+     * Take the value, either immediately being resolved as there was already a ready value and no waiters, or
+     * be added to the wait queue, to be resolved when a value becomes ready.
+     */
     take(): Promise<T> {
-        return this.sendMsg("take").then((response) => Affine.handleTakeRes(response));
+        return this.sendMsg<T>("take").then((response) => Affine.handleTakeRes(response));
     }
 
+    /**
+     * Give the value to the affine type, either waking the next waiter or leaving the value for the next `take` 
+     * invocation.
+     */
     async give(value: T): Promise<void> {
         await this.sendMsg("give", value);
+    }
+
+    /**
+     * Get the number of tasks currently waiting on the affine type's value.
+     *
+     * @returns {Promise<number>} The number of tasks currently waiting.
+     */
+    waitCount(): Promise<number> {
+        return this.sendMsg<number>("waitCount");
+    }
+
+    /**
+     * Check if there is currently a ready value (meaning the next request will be immediately resolved). Of course, 
+     * this does not imply that this thread is the one which will be immediately resolved, as no separate operations 
+     * are to be considered atomic.
+     *
+     * @returns {Promise<boolean>} if the affine type currently holds a value and nothing is waiting on said value.
+     */
+    isReady(): Promise<boolean> {
+        return this.sendMsg<boolean>("isReady");
     }
 }

@@ -112,6 +112,11 @@ which your server is distributing (for example, on `Next.js` this is your `publi
 
 And you're all set up! You now can use the `browser` Affine type.
 
+**Example**
+
+A decent example for seeing very basic usage of this library's browser module can be found in the `test-site` 
+directory's `index.html` file.
+
 ## API
 
 ### Browser Context

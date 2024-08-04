@@ -255,7 +255,7 @@ struct DistHandler {
     seen: Tree<'static, DistReload>,
     dist: &'static str,
     #[cfg(feature = "bad-cache")]
-    bc: std::sync::Mutex<lru::LruCache<std::path::PathBuf, ()>>
+    bc: lru::LruCache<std::path::PathBuf, ()>
 }
 
 impl DistHandler {
@@ -266,7 +266,7 @@ impl DistHandler {
             seen: Tree::new_static(),
             dist,
             #[cfg(feature = "bad-cache")]
-            bc: std::sync::Mutex::new(lru::LruCache::new(core::num::NonZeroUsize::new(8).unwrap()))
+            bc: lru::LruCache::new(core::num::NonZeroUsize::new(8).unwrap())
         }
     }
 
@@ -275,7 +275,7 @@ impl DistHandler {
         let e = std::time::Instant::now();
 
         #[cfg(feature = "bad-cache")]
-        let bc = &self.bc;
+        let bc = &mut self.bc;
 
         let dist = self.dist;
         match get_req_path(raw) { 
@@ -314,7 +314,7 @@ impl DistReload {
     #[cfg(all(unix, feature = "bad-cache"))]
     pub fn check_cache(
         mut parsed: PathIter, 
-        bc: &std::sync::Mutex<lru::LruCache<std::path::PathBuf, ()>>
+        bc: &mut lru::LruCache<std::path::PathBuf, ()>
     ) -> io::Result<()> {
         trace!("Checking cache for the path (unix)");
         let now = std::time::Instant::now();
@@ -339,11 +339,7 @@ impl DistReload {
             core::mem::transmute(parsed_slice)
         };
 
-        let mut guard = bc.lock().map_err(|_| io::Error::new(io::ErrorKind::Other, "Poisoned lock for LRU cache"))?;
-        let res = guard.get(path).is_some();
-        drop(guard);
-
-        if res {
+        if bc.get(path).is_some() {
             Err(io::Error::new(io::ErrorKind::InvalidData, "Path does not exist"))
         } else {
             Ok(())
@@ -360,7 +356,7 @@ impl DistReload {
     pub fn new(
         dist: &'static str, path: PathIter, parsed: PathIter,
         #[cfg(feature = "bad-cache")]
-        bc: &std::sync::Mutex<lru::LruCache<std::path::PathBuf, ()>>
+        bc: &mut lru::LruCache<std::path::PathBuf, ()>
     ) -> io::Result<Self> {
         #[cfg(all(unix, feature = "bad-cache"))] {
             Self::check_cache(parsed, bc)?;
@@ -373,13 +369,11 @@ impl DistReload {
         #[cfg(all(feature = "bad-cache", not(unix)))] {
             drop(parsed);
             trace!("Checking cache for the path");
-            let mut guard = bc.lock().map_err(|_| io::Error::new(io::ErrorKind::Other, "Poisoned lock for LRU cache"))?;
-            if guard.get(&p_buf).is_some() {
+            if bc.get(&p_buf).is_some() {
                 debug!("Found in the `bad-cache`, rejecting request");
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "Path does not exist"));
             }
-            drop(guard);
-	}
+        }
 
         match LazyFile::new(p_buf.as_path()) {
             Ok(file) => {
@@ -397,10 +391,8 @@ impl DistReload {
             Err(err) => {
                 #[cfg(feature = "bad-cache")] {
                     debug!("Path did not exist, adding to the `bad-cache`");
-                    let mut guard = bc.lock()
-                        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Poisoned lock for LRU cache"))?;
 
-                    guard.put(p_buf.strip_prefix(dist).unwrap(/* infallible */).to_path_buf(), ());
+                    bc.put(p_buf.strip_prefix(dist).unwrap(/* infallible */).to_path_buf(), ());
                 }
                 Err(err)
             }

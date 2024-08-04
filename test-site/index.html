@@ -3,15 +3,47 @@
 <head>
     <meta charset="utf-8">
     <title>Affine Tests</title>
-    <script src="https://cdn.jsdelivr.net/npm/affine-ty@0.1.3/dist/bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/affine-ty@0.2.0/dist/bundle.js"></script>
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: Arial, sans-serif;
+        }
+        input, button {
+            background-color: #333;
+            color: #e0e0e0;
+            border: 1px solid #555;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+        }
+        input::placeholder {
+            color: #888;
+        }
+        button:hover {
+            background-color: #555;
+            border-color: #777;
+        }
+        p {
+            margin: 5px 0;
+        }
+        h1 {
+            color: #fff;
+        }
+    </style>
 </head>
-<body>
+<body style="background-color:black">
     <h1>Affine Test</h1>
     <input type="text" id="valueInput" placeholder="Enter a value">
     <button id="giveButton">Give Value</button>
-    <button id="takeButton">Take Value</button>
     <p id="give-output"></p>
+    <button id="takeButton">Take Value</button>
     <p id="recv-output"></p>
+    <button id="waitCount">Wait Count</button>
+    <p id="wait-count"></p>
+    <button id="isReady">Is Ready</button>
+    <p id="is-ready"></p>
 
     <script>
         let affineInstance;
@@ -60,6 +92,20 @@
                 document.getElementById('output').textContent = 'Affine is not initialized';
             }
         });
+        document.getElementById('waitCount').addEventListener('click', () => {
+            console.log("requesting wait count");
+            affineInstance.waitCount().then(value => {
+                console.log(`got wait count ${value}`);
+                document.getElementById('wait-count').textContent = `Wait count: ${value}`;
+            });
+        });
+        document.getElementById('isReady').addEventListener('click', () => {
+            console.log("requesting is ready state");
+            affineInstance.isReady().then(res => {
+                console.log(`got isReady state: ${res}`);
+                document.getElementById('is-ready').textContent = `is ready: ${res}`;
+            });
+        })
     </script>    
 </body>
 </html>

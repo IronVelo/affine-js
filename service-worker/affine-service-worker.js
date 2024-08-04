@@ -18,9 +18,7 @@
             var item = this.items[this.head];
             this.head++;
             if (this.head === this.tail) {
-                this.head = 0;
-                this.tail = 0;
-                this.items = [];
+                this.clear();
             }
             return item;
         };
@@ -70,6 +68,32 @@
         }
         port.postMessage(undefined);
     }
+    function isReadyHandler(store, key, port) {
+        console.log("handling is ready request");
+        if (!store[key]) {
+            port.postMessage(false);
+            return;
+        }
+        if (!store[key].waitQueue.isEmpty()) {
+            port.postMessage(false);
+            return;
+        }
+        if (store[key].value === null) {
+            port.postMessage(false);
+            return;
+        }
+        port.postMessage(true);
+    }
+    function numWaitersHandler(store, key, port) {
+        console.log("handling num waiters request");
+        if (!store[key]) {
+            console.log("key not found, ret 0");
+            port.postMessage(0);
+            return;
+        }
+        console.log("key found, getting count");
+        port.postMessage(store[key].waitQueue.size());
+    }
     function eventHandler(store) {
         return function (event) {
             var _a = event.data, action = _a.action, key = _a.key, value = _a.value;
@@ -78,15 +102,26 @@
                 console.error("No `MessagePort` provided to affine event handler");
                 return;
             }
-            switch (action) {
-                case "take":
-                    takeHandler(store, key, port);
-                    break;
-                case "give":
-                    giveHandler(store, key, value, port);
-                    break;
-                default:
-                    console.error("Illegal action `".concat(action, "` provided to affine event handler"));
+            try {
+                switch (action) {
+                    case "take":
+                        takeHandler(store, key, port);
+                        break;
+                    case "give":
+                        giveHandler(store, key, value, port);
+                        break;
+                    case "waitCount":
+                        numWaitersHandler(store, key, port);
+                        break;
+                    case "isReady":
+                        isReadyHandler(store, key, port);
+                        break;
+                    default:
+                        console.error("Illegal action `".concat(action, "` provided to affine event handler"));
+                }
+            }
+            catch (error) {
+                console.log("Encountered error in affine event handler: ".concat(error));
             }
         };
     }
