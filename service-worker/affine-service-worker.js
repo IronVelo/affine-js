@@ -69,7 +69,6 @@
         port.postMessage(undefined);
     }
     function isReadyHandler(store, key, port) {
-        console.log("handling is ready request");
         if (!store[key]) {
             port.postMessage(false);
             return;
@@ -85,13 +84,10 @@
         port.postMessage(true);
     }
     function numWaitersHandler(store, key, port) {
-        console.log("handling num waiters request");
         if (!store[key]) {
-            console.log("key not found, ret 0");
             port.postMessage(0);
             return;
         }
-        console.log("key found, getting count");
         port.postMessage(store[key].waitQueue.size());
     }
     function eventHandler(store) {

@@ -51,7 +51,6 @@ function giveHandler(store: AffineStore, key: string, value: any, port: MessageP
 }
 
 function isReadyHandler(store: AffineStore, key: string, port: MessagePort) {
-    console.log("handling is ready request");
     if (!store[key]) {
         port.postMessage(false);
         return;
@@ -71,13 +70,10 @@ function isReadyHandler(store: AffineStore, key: string, port: MessagePort) {
 }
 
 function numWaitersHandler(store: AffineStore, key: string, port: MessagePort) {
-    console.log("handling num waiters request");
     if (!store[key]) {
-        console.log("key not found, ret 0");
         port.postMessage(0);
         return;
     }
-    console.log("key found, getting count");
 
     port.postMessage(store[key].waitQueue.size());
 }
