@@ -102,37 +102,54 @@
         return Queue;
     }());
 
-    function takeHandler(ctx, client) {
+    function postData(port, data) {
+        port.postMessage({ kind: "d", data: data });
+    }
+    function postPing(port) {
+        port.postMessage({ kind: "l", data: "ping" });
+    }
+    function takeHandler(ctx) {
         var node = ctx.store[ctx.key];
         if (node === undefined) {
-            ctx.store[ctx.key] = { value: null, waitQueue: new Queue() };
+            node = { value: null, waitQueue: new Queue() };
         }
         if (node.value !== null) {
             var takenValue = node.value;
             node.value = null;
-            ctx.port.postMessage(takenValue);
+            postData(ctx.port, takenValue);
         }
         else {
-            node.waitQueue.enqueue({ id: client.id, port: ctx.port });
+            node.waitQueue.enqueue({ port: ctx.port });
         }
+    }
+    function pingPromise(port) {
+        return new Promise(function (resolve) {
+            postPing(port);
+            port.onmessage = function (event) { resolve(true); };
+        });
+    }
+    function ping(port) {
+        var against = new Promise(function (resolve) {
+            setTimeout(resolve, 300, false);
+        });
+        return Promise.race([pingPromise(port), against]);
     }
     function getValidWaiter(queue) {
         return __awaiter(this, void 0, void 0, function () {
-            var swScope, maybe, client;
+            var maybe, isAlive;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
-                        swScope = self;
                         _a.label = 1;
                     case 1:
                         maybe = queue.dequeue();
                         if (maybe === undefined) {
                             return [2, undefined];
                         }
-                        return [4, swScope.clients.get(maybe.id)];
+                        return [4, ping(maybe.port)];
                     case 2:
-                        client = _a.sent();
-                        if (client !== undefined) {
+                        isAlive = _a.sent();
+                        if (isAlive) {
                             return [2, maybe.port];
                         }
                         return [3, 1];
@@ -145,47 +162,47 @@
         var node = ctx.store[ctx.key];
         if (!node) {
             ctx.store[ctx.key] = { value: value, waitQueue: new Queue() };
-            ctx.port.postMessage(undefined);
+            postData(ctx.port, undefined);
             return;
         }
         if (node.waitQueue.isEmpty()) {
             node.value = value;
-            ctx.port.postMessage(undefined);
+            postData(ctx.port, undefined);
             return;
         }
         getValidWaiter(node.waitQueue).then(function (member) {
             if (member) {
-                member.postMessage(value);
+                postData(member, value);
             }
             else {
                 node.value = value;
             }
         });
-        ctx.port.postMessage(undefined);
+        postData(ctx.port, undefined);
     }
     function isReadyHandler(ctx) {
         var node = ctx.store[ctx.key];
         if (!node) {
-            ctx.port.postMessage(false);
+            postData(ctx.port, false);
             return;
         }
         if (!node.waitQueue.isEmpty()) {
-            ctx.port.postMessage(false);
+            postData(ctx.port, false);
             return;
         }
         if (node.value === null) {
-            ctx.port.postMessage(false);
+            postData(ctx.port, false);
             return;
         }
-        ctx.port.postMessage(true);
+        postData(ctx.port, true);
     }
     function numWaitersHandler(ctx) {
         var node = ctx.store[ctx.key];
         if (!node) {
-            ctx.port.postMessage(0);
+            postData(ctx.port, 0);
             return;
         }
-        ctx.port.postMessage(node.waitQueue.size());
+        postData(ctx.port, node.waitQueue.size());
     }
     function eventHandler(store) {
         return function (event) {
@@ -199,7 +216,7 @@
             try {
                 switch (action) {
                     case "take":
-                        takeHandler(ctx, event.source);
+                        takeHandler(ctx);
                         break;
                     case "give":
                         giveHandler(ctx, value);

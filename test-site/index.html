@@ -3,19 +3,43 @@
 <head>
     <meta charset="utf-8">
     <title>Affine Tests</title>
-    <script src="https://cdn.jsdelivr.net/npm/affine-ty@0.2.0/dist/bundle.js"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/affine-ty@0.2.0/dist/bundle.js"></script> -->
+    <script src="/bundle.js"></script>
     <style>
         body {
             background-color: #121212;
             color: #e0e0e0;
             font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            width: 400px;
+            padding: 20px;
+            background-color: #1e1e1e;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            grid-gap: 10px;
+            align-items: center;
+        }
+        .grid input {
+            grid-column: span 2;
+        }
+        .grid button {
+            width: 100%;
         }
         input, button {
             background-color: #333;
             color: #e0e0e0;
             border: 1px solid #555;
             padding: 10px;
-            margin: 5px 0;
             border-radius: 5px;
         }
         input::placeholder {
@@ -24,29 +48,51 @@
         button:hover {
             background-color: #555;
             border-color: #777;
+            cursor: pointer;
         }
         p {
-            margin: 5px 0;
+            margin: 0;
         }
         h1 {
             color: #fff;
+            text-align: center;
+        }
+        .loading {
+            display: inline-block;
+            animation: spin 1s infinite linear;
+            border: 2px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 2px solid #3498db;
+            width: 20px;
+            height: 20px;
+            margin-left: 10px;
+            margin-top: 2px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
-<body style="background-color:black">
-    <h1>Affine Test</h1>
-    <input type="text" id="valueInput" placeholder="Enter a value">
-    <button id="giveButton">Give Value</button>
-    <p id="give-output"></p>
-    <button id="takeButton">Take Value</button>
-    <p id="recv-output"></p>
-    <button id="waitCount">Wait Count</button>
-    <p id="wait-count"></p>
-    <button id="isReady">Is Ready</button>
-    <p id="is-ready"></p>
+<body>
+    <div class="container">
+        <h1>Affine Test</h1>
+        <div class="grid">
+            <input type="text" id="valueInput" placeholder="Enter a value">
+            <button id="giveButton">Give Value</button>
+            <p id="give-output"></p>
+            <button id="takeButton">Take Value</button>
+            <p id="recv-output"></p>
+            <button id="waitCount">Wait Count</button>
+            <p id="wait-count"></p>
+            <button id="isReady">Is Ready</button>
+            <p id="is-ready"></p>
+        </div>
+    </div>
 
     <script>
         let affineInstance;
+        let localWaiters = 0;
 
         // Initialize Affine
         Affine.browser.Affine.init('myKey')
@@ -71,27 +117,33 @@
                         document.getElementById('give-output').textContent = `Error storing value: ${error.message}`;
                     });
             } else {
-                document.getElementById('give-output').textContent = 'Please enter a value and ensure Affine is initialized';
+                document.getElementById('give-output')
+                    .textContent = 'Please enter a value and ensure Affine is initialized';
             }
         });
 
         // Take button functionality
         document.getElementById('takeButton').addEventListener('click', () => {
             if (affineInstance) {
-                document.getElementById('recv-output').textContent = "Waiting...";
+                localWaiters++;
+                let recvOut = document.getElementById('recv-output');
+                recvOut.innerHTML = '<div class="loading"></div>';
 
                 affineInstance.take()
                     .then(value => {
-                        console.log("Got value from my key: ".concat(value));
-                        document.getElementById('recv-output').textContent = `Retrieved value: ${value}`;
+                        localWaiters--;
+                        console.log(`Got value: ${value}. Local wait count: ${localWaiters}`);
+                        recvOut.textContent = `Retrieved value: ${value}. Waiting on: ${localWaiters}`;
                     })
                     .catch(error => {
                         document.getElementById('recv-output').textContent = `Error retrieving value: ${error.message}`;
                     });
             } else {
-                document.getElementById('output').textContent = 'Affine is not initialized';
+                document.getElementById('recv-output').textContent = 'Affine is not initialized';
             }
         });
+
+        // Wait count functionality
         document.getElementById('waitCount').addEventListener('click', () => {
             console.log("requesting wait count");
             affineInstance.waitCount().then(value => {
@@ -99,13 +151,16 @@
                 document.getElementById('wait-count').textContent = `Wait count: ${value}`;
             });
         });
+
+        // Is ready functionality
         document.getElementById('isReady').addEventListener('click', () => {
             console.log("requesting is ready state");
             affineInstance.isReady().then(res => {
                 console.log(`got isReady state: ${res}`);
                 document.getElementById('is-ready').textContent = `is ready: ${res}`;
             });
-        })
-    </script>    
+        });
+    </script>
 </body>
 </html>
+

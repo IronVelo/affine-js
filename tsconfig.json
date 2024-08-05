@@ -6,7 +6,7 @@
     "noEmitOnError": true,
     "removeComments": true,
     "sourceMap": true,
-    "lib": ["es2015", "webworker"],
+    "lib": ["es2021", "webworker"],
     "rootDir": "./src",
     "outDir": "js"
   },

@@ -8,7 +8,6 @@
 import { Queue } from './queue';
 
 interface Waiter {
-    id: string,
     port: MessagePort
 }
 
@@ -31,19 +30,66 @@ interface UbiCtx {
     port: MessagePort,
 }
 
-function takeHandler(ctx: UbiCtx, client: Client) {
+function postData(port: MessagePort, data: any) {
+    port.postMessage({kind: "d", data: data});
+}
+
+function postPing(port: MessagePort) {
+    port.postMessage({kind: "l", data: "ping"});
+}
+
+function takeHandler(ctx: UbiCtx) {
     let node = ctx.store[ctx.key];
     if (node === undefined) {
-	    ctx.store[ctx.key] = { value: null, waitQueue: new Queue() };
+        node = { value: null, waitQueue: new Queue() };
     }
 
     if (node.value !== null) {
         const takenValue = node.value;
         node.value = null;
-        ctx.port.postMessage(takenValue);
+        postData(ctx.port, takenValue);
     } else {
-        node.waitQueue.enqueue({ id: client.id, port: ctx.port });
+        node.waitQueue.enqueue({ port: ctx.port });
     }
+}
+
+function pingPromise(port: MessagePort): Promise<boolean> {
+    return new Promise((resolve) => {
+        postPing(port);
+        port.onmessage = (event) => { resolve(true); }
+    });
+}
+
+function ping(port: MessagePort): Promise<boolean> {
+    // TODO: relying on time to interpret the port being closed is bad. Moving forward a more robust
+    // heuristic should be employed. Before first major release this must not exist.
+    // 
+    // --- Attempted Solutions ---
+    // 
+    // - Check if the client ID still is connected.
+    //     ISSUE: This does not work when the page is refreshed.
+    // - Wrap port in WeakRef to lean on the garbage collector as a heuristic.
+    //     ISSUE: This worked half of the time. Was more flaky than the client ID check.
+    // - Communicate closed to the service worker with `beforeunload`
+    //     ISSUE: Again, this worked sometimes, but not close to always. Which is unacceptable.
+    // 
+    // I'll be tracking the open issue for adding a way of checking if a message port is open.
+    // But, even when this is supported, it will take time for most users to update their browsers,
+    // so this will take time.
+    // 
+    // I'll be working on other hacks to get this more reliable, as again, this solution has many
+    // contingencies related to its correctness and can lead to starvation. 
+    // 
+    // One way to iterate on this poor solution is through a moving average of round trip times. 
+    // 
+    // Also, in a later version this acknowledgement should be merged with the actual providing of 
+    // data to avoid the excess hop (even though the cost of that be minimal, which is why it is 
+    // acceptable for v0.3.1.
+    let against = new Promise((resolve) => {
+        setTimeout(resolve, 300, false)
+    });
+
+    return Promise.race([pingPromise(port), against]) as Promise<boolean>;
 }
 
 async function getValidWaiter(queue: Queue<Waiter>): Promise<MessagePort | undefined> {
@@ -58,10 +104,9 @@ async function getValidWaiter(queue: Queue<Waiter>): Promise<MessagePort | undef
             return undefined;
         }
 
-        let client = await swScope.clients.get(maybe.id);
+        let isAlive = await ping(maybe.port);
 
-        // needs review as we are yielding. But, we have ownership of our value. 
-        if (client !== undefined) {
+        if (isAlive) {
             return maybe.port;
         }
 
@@ -76,7 +121,7 @@ function giveHandler(ctx: UbiCtx, value: any) {
         ctx.store[ctx.key] = { value, waitQueue: new Queue() };
 
         // exit early
-        ctx.port.postMessage(undefined);
+        postData(ctx.port, undefined);
         return;
     }
 
@@ -86,14 +131,14 @@ function giveHandler(ctx: UbiCtx, value: any) {
         node.value = value;
 
         // exit early
-        ctx.port.postMessage(undefined);
+        postData(ctx.port, undefined);
         return;
     }
 
     getValidWaiter(node.waitQueue).then(member => {
         if (member) {
             // we found a valid waiter, immediately provide the value to ensure fairness.
-            member.postMessage(value);
+            postData(member, value);
         } else {
             // there was no valid waiter, provide ready value.
             node.value = value;
@@ -101,38 +146,38 @@ function giveHandler(ctx: UbiCtx, value: any) {
     });
 
     // we can let the task waiting on us go early, we'll handle the rest.
-    ctx.port.postMessage(undefined);
+    postData(ctx.port, undefined);
 }
 
 function isReadyHandler(ctx: UbiCtx) {
     let node = ctx.store[ctx.key];
     if (!node) {
-        ctx.port.postMessage(false);
+        postData(ctx.port, false);
         return;
     }
 
     if (!node.waitQueue.isEmpty()) {
-        ctx.port.postMessage(false);
+        postData(ctx.port, false);
         return;
     }
 
     if (node.value === null) {
-        ctx.port.postMessage(false);
+        postData(ctx.port, false);
         return;
     }
 
-    ctx.port.postMessage(true);
+    postData(ctx.port, true);
 }
 
 function numWaitersHandler(ctx: UbiCtx) {
     let node = ctx.store[ctx.key];
 
     if (!node) {
-        ctx.port.postMessage(0);
+        postData(ctx.port, 0);
         return;
     }
 
-    ctx.port.postMessage(node.waitQueue.size());
+    postData(ctx.port, node.waitQueue.size());
 }
 
 function eventHandler(store: AffineStore): (event: ExtendableMessageEvent) => void {
@@ -150,7 +195,7 @@ function eventHandler(store: AffineStore): (event: ExtendableMessageEvent) => vo
         try {
             switch (action) {
                 case "take":
-                    takeHandler(ctx, event.source as Client);
+                    takeHandler(ctx);
                     break;
                 case "give":
                     giveHandler(ctx, value);

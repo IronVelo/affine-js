@@ -83,12 +83,29 @@ export default class Affine<T> {
             throw new InactiveServiceWorker();
         }
 
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             const channel = new MessageChannel();
-            channel.port1.onmessage = (event) => resolve(event.data);
+            channel.port1.onmessage = (event) => {
+                if (event.data) {
+                switch (event.data.kind) {
+                    case "l": // liveness check
+                        channel.port1.postMessage("pong");
+                        break;
+                    case "d": // data recv
+                        resolve(event.data.data);
+                        break;
+                    default:
+                        // this should be unreachable.
+                        console.error(
+                            `Impossibility encountered, illegal event kind from service worker: ${event.data.kind}`
+                        );
+                        reject();
+                        break;
+                }}
+            }
             
             this.serviceWorker.active.postMessage(
-                { action, key: this.key, value },
+                { action, key: this.key, value: value },
                 [channel.port2]
             );
         });
