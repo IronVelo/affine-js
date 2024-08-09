@@ -102,24 +102,33 @@
         return Queue;
     }());
 
+    function emptyNode() {
+        return {
+            value: null,
+            waitQueue: new Queue(),
+        };
+    }
     function postData(port, data) {
         port.postMessage({ kind: "d", data: data });
     }
     function postPing(port) {
         port.postMessage({ kind: "l", data: "ping" });
     }
+    function takeVal(ctx) {
+        var val = ctx.store[ctx.key].value;
+        ctx.store[ctx.key].value = null;
+        return val;
+    }
     function takeHandler(ctx) {
-        var node = ctx.store[ctx.key];
-        if (node === undefined) {
-            node = { value: null, waitQueue: new Queue() };
+        if (ctx.store[ctx.key] === undefined) {
+            ctx.store[ctx.key] = emptyNode();
         }
-        if (node.value !== null) {
-            var takenValue = node.value;
-            node.value = null;
-            postData(ctx.port, takenValue);
+        var value = takeVal(ctx);
+        if (value) {
+            postData(ctx.port, value);
         }
         else {
-            node.waitQueue.enqueue({ port: ctx.port });
+            ctx.store[ctx.key].waitQueue.enqueue({ port: ctx.port });
         }
     }
     function pingPromise(port) {
@@ -158,27 +167,79 @@
             });
         });
     }
-    function giveHandler(ctx, value) {
+    function newNode(value) {
+        var node = emptyNode();
+        node.value = value;
+        return node;
+    }
+    function setNewNode(ctx, value) {
+        if (ctx.store[ctx.key]) {
+            console.warn("Precondition violated, attempted to assign new node to a new which already existed.");
+            return;
+        }
+        ctx.store[ctx.key] = newNode(value);
+        return;
+    }
+    function setReadyValue(ctx, value) {
         var node = ctx.store[ctx.key];
-        if (!node) {
-            ctx.store[ctx.key] = { value: value, waitQueue: new Queue() };
-            postData(ctx.port, undefined);
+        if (!node.waitQueue.isEmpty()) {
+            console.warn("Precondition violated, attempted to provide new node when the wait queue was not empty. \
+             This violates the property of fairness and can lead to starvation in extreme circumstances.");
             return;
         }
+        if (node.value) {
+            console.warn("Precondition violated, attempted to assign ready value to a node which already has a ready value. \
+             This indicates a violation of the affine types invariants.");
+            return;
+        }
+        node.value = value;
+        return;
+    }
+    function provideValue(ctx, value) {
+        var node = ctx.store[ctx.key];
         if (node.waitQueue.isEmpty()) {
-            node.value = value;
-            postData(ctx.port, undefined);
-            return;
+            console.warn("Precondition violated, attempted to provide value to a waiter but there were no waiters. This \
+             should have been provided as the ready value.");
+            return Promise.resolve(false);
         }
-        getValidWaiter(node.waitQueue).then(function (member) {
+        return getValidWaiter(node.waitQueue).then(function (member) {
             if (member) {
                 postData(member, value);
+                return true;
             }
-            else {
-                node.value = value;
-            }
+            return false;
         });
-        postData(ctx.port, undefined);
+    }
+    function giveImpl(ctx, value) {
+        return __awaiter(this, void 0, void 0, function () {
+            var node;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        node = ctx.store[ctx.key];
+                        if (!node) {
+                            setNewNode(ctx, value);
+                            return [2];
+                        }
+                        _a.label = 1;
+                    case 1:
+                        if (node.waitQueue.isEmpty()) {
+                            setReadyValue(ctx, value);
+                            return [2];
+                        }
+                        return [4, provideValue(ctx, value)];
+                    case 2:
+                        if (_a.sent()) {
+                            return [2];
+                        }
+                        return [3, 1];
+                    case 3: return [2];
+                }
+            });
+        });
+    }
+    function giveHandler(ctx, value) {
+        return giveImpl(ctx, value).then(function () { return postData(ctx.port, undefined); });
     }
     function isReadyHandler(ctx) {
         var node = ctx.store[ctx.key];
@@ -219,7 +280,7 @@
                         takeHandler(ctx);
                         break;
                     case "give":
-                        giveHandler(ctx, value);
+                        event.waitUntil(giveHandler(ctx, value));
                         break;
                     case "waitCount":
                         numWaitersHandler(ctx);

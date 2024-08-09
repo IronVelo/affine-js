@@ -13,7 +13,7 @@ interface Waiter {
 
 interface AffineData<T> {
     value: T | null,
-    waitQueue: Queue<Waiter>;
+    waitQueue: Queue<Waiter>,
 }
 
 type AffineStore = { [key: string]: AffineData<unknown> };
@@ -30,6 +30,13 @@ interface UbiCtx {
     port: MessagePort,
 }
 
+function emptyNode<T>(): AffineData<T> {
+    return {
+        value: null,
+        waitQueue: new Queue(),
+    }
+}
+
 function postData(port: MessagePort, data: any) {
     port.postMessage({kind: "d", data: data});
 }
@@ -38,18 +45,23 @@ function postPing(port: MessagePort) {
     port.postMessage({kind: "l", data: "ping"});
 }
 
+function takeVal(ctx: UbiCtx): any {
+    const val = ctx.store[ctx.key].value;
+    ctx.store[ctx.key].value = null;
+    return val;
+}
+
 function takeHandler(ctx: UbiCtx) {
-    let node = ctx.store[ctx.key];
-    if (node === undefined) {
-        node = { value: null, waitQueue: new Queue() };
+    if (ctx.store[ctx.key] === undefined) {
+        ctx.store[ctx.key] = emptyNode();
     }
 
-    if (node.value !== null) {
-        const takenValue = node.value;
-        node.value = null;
-        postData(ctx.port, takenValue);
+    const value = takeVal(ctx);
+
+    if (value) {
+        postData(ctx.port, value);
     } else {
-        node.waitQueue.enqueue({ port: ctx.port });
+        ctx.store[ctx.key].waitQueue.enqueue({ port: ctx.port });
     }
 }
 
@@ -114,39 +126,125 @@ async function getValidWaiter(queue: Queue<Waiter>): Promise<MessagePort | undef
     }
 }
 
-function giveHandler(ctx: UbiCtx, value: any) {
+function newNode<T>(value: T): AffineData<T> {
+    let node = emptyNode();
+    node.value = value;
+    return node as AffineData<T>;
+}
+
+/**
+ * Precondition:
+ * - Node must be undefined/null
+ * 
+ * Postcondition:
+ * - Node will be defined with an empty queue and the provided `value` ready for the next request.
+ */
+function setNewNode(ctx: UbiCtx, value: any): void {
+    if (ctx.store[ctx.key]) {
+        console.warn("Precondition violated, attempted to assign new node to a new which already existed.");
+        return;
+    }
+
+    ctx.store[ctx.key] = newNode(value);
+
+    return;
+}
+
+/**
+ * Preconditions:
+ * - The nodes wait queue must be empty to ensure fairness.
+ * - The nodes value must be null.
+ *
+ * Postcondition:
+ * - The next request for a value from this node will be provided the current value.
+ *
+ * Unchecked Precondition:
+ * - The node must not be null/undefined.
+ */
+function setReadyValue(ctx: UbiCtx, value: any): void {
+    let node = ctx.store[ctx.key]
+    if (!node.waitQueue.isEmpty()) {
+        console.warn(
+            "Precondition violated, attempted to provide new node when the wait queue was not empty. \
+             This violates the property of fairness and can lead to starvation in extreme circumstances."
+        );
+        return;
+    }
+
+    if (node.value) {
+        console.warn(
+            "Precondition violated, attempted to assign ready value to a node which already has a ready value. \
+             This indicates a violation of the affine types invariants."
+        );
+        return;
+    }
+
+    node.value = value;
+    return;
+}
+
+/**
+ * Precondition:
+ * - The waitQueue must be non-empty.
+ *
+ * Postcondition:
+ * - result <-> value provided to waiter.
+ *
+ * Unchecked Precondition:
+ * - The node must not be null/undefined/
+ */
+function provideValue(ctx: UbiCtx, value: any): Promise<boolean> {
     let node = ctx.store[ctx.key];
-    if (!node) {
-        // we must not have any waiters as the store was never initialized for this key.
-        ctx.store[ctx.key] = { value, waitQueue: new Queue() };
 
-        // exit early
-        postData(ctx.port, undefined);
-        return;
-    }
-
-    // prior to getting a valid waiter, we check if the queue is empty
     if (node.waitQueue.isEmpty()) {
-        // fast path, give val immediately.
-        node.value = value;
+        console.warn(
+            "Precondition violated, attempted to provide value to a waiter but there were no waiters. This \
+             should have been provided as the ready value."
+        );
+        return Promise.resolve(false);
+    }
 
-        // exit early
-        postData(ctx.port, undefined);
+    return getValidWaiter(node.waitQueue).then(member => {
+        if (member) {
+            postData(member, value);
+            return true;
+        }
+        
+        // Since `getValidWaiter` is asynchronous we cannot provide a ready value while maintaining 
+        // correctness. We must retry as our state may have changed.
+        return false;
+    });
+}
+
+async function giveImpl(ctx: UbiCtx, value: any): Promise<void> {
+    let node = ctx.store[ctx.key];
+        
+    if (!node) {
+        setNewNode(ctx, value);
         return;
     }
 
-    getValidWaiter(node.waitQueue).then(member => {
-        if (member) {
-            // we found a valid waiter, immediately provide the value to ensure fairness.
-            postData(member, value);
-        } else {
-            // there was no valid waiter, provide ready value.
-            node.value = value;
+    while (true) {
+        if (node.waitQueue.isEmpty()) {
+            setReadyValue(ctx, value);
+            return;
         }
-    });
 
-    // we can let the task waiting on us go early, we'll handle the rest.
-    postData(ctx.port, undefined);
+        if (await provideValue(ctx, value)) {
+            return;
+        }
+
+        // In context change in the async provideValue we ran out of waiters. We cannot know
+        // that it is sound to provide a ready value as the state could have been altered in said 
+        // context change. 
+        // 
+        // Continue to base case of checking if the waitQueue is empty synchronously prior to setting
+        // ready value. 
+    }
+}
+
+function giveHandler(ctx: UbiCtx, value: any): Promise<void> {
+    return giveImpl(ctx, value).then(() => postData(ctx.port, undefined));
 }
 
 function isReadyHandler(ctx: UbiCtx) {
@@ -198,7 +296,7 @@ function eventHandler(store: AffineStore): (event: ExtendableMessageEvent) => vo
                     takeHandler(ctx);
                     break;
                 case "give":
-                    giveHandler(ctx, value);
+                    event.waitUntil(giveHandler(ctx, value));
                     break;
                 case "waitCount":
                     numWaitersHandler(ctx);
